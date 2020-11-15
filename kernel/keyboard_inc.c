@@ -19,6 +19,8 @@ MODULE_AUTHOR("Michal Brach");
 #define DEV_CNT 7
 #define DEV_NAME "keyboard_inc"
 
+#define MSG_MAX 32
+
 #define LOG_RED            "\x1b[31m"
 #define LOG_GREEN          "\x1b[32m"
 #define LOG_YELLOW         "\x1b[33m"
@@ -83,7 +85,38 @@ static ssize_t dev_read (struct file *filp, char __user *buff, size_t count, lof
 
 static ssize_t dev_write(struct file *filp, const char __user *buff, size_t count, loff_t *offp)
 {
-    //TODO
+    /* local kernel memory*/
+    char *kern_buf;
+    int ret;
+
+    if (!buff) {
+        return -EINVAL;
+    } 
+
+    /* Allocate memory in kernel */
+    kern_buf = kmalloc (count, GFP_KERNEL);
+    if (!kern_buf) {
+        return -ENOMEM;
+    }
+
+    /* Transfer data from user to kernel through kernel buffer*/
+    if(copy_from_user(kern_buf, buff, count)) {
+        kfree(kern_buf);
+        return -EFAULT;
+    }
+
+    /* Update global data in kernel */
+    if(kstrtoint(kern_buf, MSG_MAX, &counter))
+    {
+        kfree(kern_buf);
+        return -ERANGE;
+    }
+    ret = count;
+    
+    /* Print result what userspace gave back the new value by system call */
+    printk(KERN_INFO "Counter is reset %d\n",counter);
+
+    return ret;
     
     return 0;
 }

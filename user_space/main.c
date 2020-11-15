@@ -9,6 +9,7 @@
 
 #define DEV_NAME "/dev/keyboard_inc"
 #define MSG_MAX 32
+#define MSG_RESET "0"
 
 int32_t convert_to_int(unsigned char* data) {
     int32_t x = 0;
@@ -32,6 +33,8 @@ int main(int argc, char *argv[])
         msg[i] = 0;
     }
 
+    int i = 0;
+
     while (1) {
         /* Open kernel */
         fd = open(DEV_NAME, O_RDWR);
@@ -50,7 +53,22 @@ int main(int argc, char *argv[])
         }
         if (num_read) {
             counter = convert_to_int(msg);
-            printf("returned: %d from the system call, num bytes read: %d\n", counter, (int)num_read);
+            printf("returned: %d from the system call, num bytes read: %d (%d)\n", counter, (int)num_read, i);
+        }
+        
+        i++;
+        if (i % 100 == 0) {
+            printf("Reset counter\n");
+            
+            num_written = write(fd, MSG_RESET, sizeof(MSG_RESET));
+            if (num_written == -1) {
+                perror("Cannot send message to kernel module \n");
+                return -1;
+            }
+        }
+        
+        if (i == 300) {
+            break;
         }
         
         close(fd);
