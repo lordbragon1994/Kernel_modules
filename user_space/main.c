@@ -149,6 +149,11 @@ main(void)
 {
     unsigned char msg[MSG_MAX];
     unsigned char buf[MSG_MAX];
+    unsigned char date[2 * MSG_MAX];
+    snprintf(date, MSG_MAX, "was no reset yet");
+    
+    time_t reset_time;
+    
     int32_t counter = 0;
 
     for (int i = 0; i < MSG_MAX; i++) {
@@ -222,9 +227,16 @@ main(void)
             
             if (nk_button_label(ctx, "RESET")) {
                 kernel_interface_reset();
+                
+                reset_time = time(NULL);
+
+                snprintf(date, strlen(ctime(&reset_time)), "%s", ctime(&reset_time));
             }
             
-            nk_label(ctx, "Date", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(ctx, GUI_SIZE_ELEM, 2);
+            
+            nk_label(ctx, "Counter reset time: ", NK_TEXT_LEFT);
+            nk_label(ctx, date, NK_TEXT_LEFT);
         }
         nk_end(ctx);
           
