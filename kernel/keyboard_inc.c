@@ -16,6 +16,9 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michal Brach");
 
 #define IRQ_KEYBORD_NUMBER 1
+
+#define MY_WORK_QUEUE_NAME "WQ_schedule"
+
 #define DEV_CNT 7
 #define DEV_NAME "keyboard_inc"
 
@@ -121,23 +124,54 @@ static ssize_t dev_write(struct file *filp, const char __user *buff, size_t coun
     return 0;
 }
 
-irqreturn_t irq_handler(int irq, void *dev_id)
+static struct workqueue_struct *my_workqueue;
+typedef struct {
+  struct work_struct my_work;
+  unsigned char keycode;        /* Save scancode for workqueue */
+} my_work_t;
+
+my_work_t *work;
+
+static void got_char(struct work_struct *work)
 {
-    counter++;
+
+    my_work_t *my_work = (my_work_t *)work;
     
+    if (my_work->keycode != 224) {
+        if (my_work->keycode & 0x80) {
+            counter++;
+            printk (KERN_INFO "PRESSEDD %d (%d)\n", my_work->keycode, counter);
+        }
+        else {
+            printk (KERN_INFO "RELEASED %d (%d)\n", my_work->keycode, counter);
+        }
+    }
+
+    kfree( (void *)work );
+    return;
+}
+
+
+irqreturn_t irq_handler(int irq, void *dev_id)
+{    
     static unsigned char scancode;
     unsigned char status;
 
     status = inb(0x64);
     scancode = inb(0x60);
-
-    printk (KERN_INFO "Pressed %d (%d)\n", scancode, counter);
+    
+    work = (my_work_t *) kmalloc(sizeof(my_work_t),GFP_KERNEL);
+    work->keycode = scancode;
+    INIT_WORK((struct work_struct *)work,got_char);
+    queue_work(my_workqueue,(struct work_struct *) work);
 
     return IRQ_HANDLED;
 }
 
 static int __init irq_ex_init(void)
 {
+    my_workqueue = create_workqueue(MY_WORK_QUEUE_NAME);
+    
     printk (KERN_INFO "INIT KEYBORD MODULE \n");
     
     /* Free interrupt*/
@@ -150,7 +184,6 @@ static int __init irq_ex_init(void)
         "test_keyboard_irq_handler",
         (void *)(irq_handler)
     );
-    
     if (ret) {
         printk (KERN_ERR "Can't create handler interrupt for keyboard\n");    
     }
