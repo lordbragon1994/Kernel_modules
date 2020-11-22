@@ -3,6 +3,7 @@ FLAG = -o
 LFLAG = -lX11
 
 obj-m = kernel/keyboard_inc.o
+obj-m = kernel/time.o
 
 Kernel_Version = $(shell uname -r)
 

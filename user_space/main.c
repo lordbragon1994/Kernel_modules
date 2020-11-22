@@ -19,6 +19,7 @@
 #include <X11/Xlib.h>
 
 #define DEV_NAME "/dev/keyboard_inc"
+#define DEV_TIME_NAME "/dev/keyboard_time"
 #define MSG_MAX 32
 #define MSG_RESET "0"
 
@@ -58,6 +59,45 @@ int32_t kernel_interface_keyboard_counter(unsigned char* msg, int32_t counter) {
         close(fd);
         
         return counter;
+    }
+    
+    return -1;
+}
+
+int kernel_interface_keyboard_timer(unsigned char* msg) {
+    if (msg) {
+        double factor = 4.29496730204;
+        int32_t s = 0;
+        
+        int fd;
+        ssize_t num_read;
+        /* Open kernel */
+        fd = open(DEV_TIME_NAME, O_RDWR);
+        if (fd == -1)
+        {
+            perror("Cannot open file description from kernel\n");
+            return -1;
+        }
+        /* Read value data from kernel */
+        num_read = read(fd, msg, MSG_MAX);
+        if (num_read == -1)
+        {
+            perror("Cannot read information from kernel \n");
+            return -1;
+        }
+        if (num_read) {
+            printf("Recv %d bytes\n", num_read);
+            for (int i = 0; i < num_read; i++) {
+                printf("%2.2X ", msg[i]);
+            }
+            printf("\n");
+                        
+            memcpy(&s, &(msg[4]), 4);
+            // time_t t = (int)(s * factor);
+        }
+        close(fd);
+        
+        return (int)(s * factor);
     }
     
     return -1;
@@ -201,6 +241,9 @@ main(void)
     while (running)
     {
         counter = kernel_interface_keyboard_counter(msg, counter);
+        if (counter < 0) {
+            exit(1);
+        }
         /* Input */
         XEvent evt;
         started = timestamp();
@@ -227,8 +270,8 @@ main(void)
             
             if (nk_button_label(ctx, "RESET")) {
                 kernel_interface_reset();
-                
-                reset_time = time(NULL);
+                reset_time = kernel_interface_keyboard_timer(msg);
+                // reset_time = time(NULL);                
 
                 snprintf(date, strlen(ctime(&reset_time)), "%s", ctime(&reset_time));
             }
