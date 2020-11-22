@@ -11,6 +11,7 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
+#include <linux/mutex.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michal Brach");
@@ -18,6 +19,7 @@ MODULE_AUTHOR("Michal Brach");
 #define IRQ_KEYBORD_NUMBER 1
 
 #define MY_WORK_QUEUE_NAME "WQ_schedule"
+static DEFINE_MUTEX(cache_lock);
 
 #define DEV_CNT 7
 #define DEV_NAME "keyboard_inc"
@@ -71,12 +73,17 @@ static ssize_t dev_read (struct file *filp, char __user *buff, size_t count, lof
         return -EINVAL;
     }
 
+	mutex_lock(&cache_lock);
+
    /* Transfer data from Kernel to user */
     if (copy_to_user(buff, &counter, sizeof(int))) {
         printk(KERN_INFO "Send to user failed\n");
         
         return -EFAULT;
     }
+	
+	mutex_unlock(&cache_lock);
+	
     ret = sizeof(int);
     *offp += count;
 
@@ -108,12 +115,17 @@ static ssize_t dev_write(struct file *filp, const char __user *buff, size_t coun
         return -EFAULT;
     }
 
+	mutex_lock(&cache_lock);
+
     /* Update global data in kernel */
     if(kstrtoint(kern_buf, MSG_MAX, &counter))
     {
         kfree(kern_buf);
         return -ERANGE;
     }
+	
+	mutex_unlock(&cache_lock);
+	
     ret = count;
     
     /* Print result what userspace gave back the new value by system call */
@@ -139,7 +151,11 @@ static void got_char(struct work_struct *work)
     
     if (my_work->keycode != 224) {
         if (my_work->keycode & 0x80) {
+			
+			mutex_lock(&cache_lock);
             counter++;
+			mutex_unlock(&cache_lock);
+			
             printk (KERN_INFO "PRESSEDD %d (%d)\n", my_work->keycode, counter);
         }
         else {
